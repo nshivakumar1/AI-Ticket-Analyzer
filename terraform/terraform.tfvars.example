@@ -1,0 +1,12 @@
+aws_region         = "us-east-1"
+project_name       = "ticket-analyzer"
+environment        = "dev"
+ec2_instance_type  = "t2.micro"
+openai_api_key     = "your-openai-api-key-here"
+dynamodb_table_name = "tickets"
+ecr_repository_name = "ticket-analyzer-backend"
+enable_cloudfront  = true
+
+# Restrict this in production
+allowed_cidr_blocks = ["0.0.0.0/0"]
+
