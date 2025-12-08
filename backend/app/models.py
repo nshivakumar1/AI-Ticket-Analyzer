@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -66,7 +66,7 @@ class TicketUpdate(BaseModel):
 
 
 class TicketListResponse(BaseModel):
-    tickets: list[TicketResponse]
+    tickets: List[TicketResponse]
     total: int
     page: int
     page_size: int
