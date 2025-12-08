@@ -31,7 +31,7 @@ data "aws_ami" "amazon_linux" {
 
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    values = ["al2023-ami-2023.*-x86_64"]
   }
 }
 
@@ -138,10 +138,10 @@ resource "random_id" "bucket_suffix" {
 resource "aws_s3_bucket_public_access_block" "frontend" {
   bucket = aws_s3_bucket.frontend.id
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+  block_public_acls       = var.enable_cloudfront
+  block_public_policy     = var.enable_cloudfront
+  ignore_public_acls      = var.enable_cloudfront
+  restrict_public_buckets = var.enable_cloudfront
 }
 
 resource "aws_s3_bucket_versioning" "frontend" {
@@ -157,7 +157,7 @@ resource "aws_cloudfront_origin_access_identity" "frontend" {
   comment = "OAI for ${var.project_name} frontend"
 }
 
-# S3 Bucket Policy for CloudFront
+# S3 Bucket Policy for CloudFront (Private)
 resource "aws_s3_bucket_policy" "frontend" {
   count  = var.enable_cloudfront ? 1 : 0
   bucket = aws_s3_bucket.frontend.id
@@ -172,6 +172,40 @@ resource "aws_s3_bucket_policy" "frontend" {
         }
         Action   = "s3:GetObject"
         Resource = "${aws_s3_bucket.frontend.arn}/*"
+      }
+    ]
+  })
+}
+
+# S3 Bucket Configuration for Website Hosting (Public)
+resource "aws_s3_bucket_website_configuration" "frontend" {
+  count  = var.enable_cloudfront ? 0 : 1
+  bucket = aws_s3_bucket.frontend.id
+
+  index_document {
+    suffix = "index.html"
+  }
+
+  error_document {
+    key = "index.html"
+  }
+}
+
+# S3 Bucket Policy for Website Hosting (Public)
+resource "aws_s3_bucket_policy" "frontend_public" {
+  count  = var.enable_cloudfront ? 0 : 1
+  bucket = aws_s3_bucket.frontend.id
+  depends_on = [aws_s3_bucket_public_access_block.frontend]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.frontend.arn}/*"
       }
     ]
   })
@@ -276,6 +310,14 @@ resource "aws_security_group" "ec2" {
     description = "SSH"
     from_port   = 22
     to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_cidr_blocks
+  }
+
+  ingress {
+    description = "Backend API"
+    from_port   = 8000
+    to_port     = 8000
     protocol    = "tcp"
     cidr_blocks = var.allowed_cidr_blocks
   }
@@ -430,8 +472,8 @@ resource "aws_instance" "app" {
 
   user_data = <<-EOF
               #!/bin/bash
-              yum update -y
-              yum install -y docker
+              dnf update -y
+              dnf install -y docker git
               systemctl start docker
               systemctl enable docker
               usermod -a -G docker ec2-user
@@ -441,12 +483,12 @@ resource "aws_instance" "app" {
               chmod +x /usr/local/bin/docker-compose
               
               # Install Nginx
-              yum install -y nginx
+              dnf install -y nginx
               systemctl start nginx
               systemctl enable nginx
               
               # Install CloudWatch agent (optional)
-              yum install -y amazon-cloudwatch-agent
+              dnf install -y amazon-cloudwatch-agent
               EOF
 
   tags = {

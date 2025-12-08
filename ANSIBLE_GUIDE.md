@@ -26,7 +26,7 @@ This project includes Ansible automation for deploying the backend and frontend,
     - Login to Semaphore.
     - Create a new "Project" (e.g., "Ticket Analyzer").
     - **Key Store**: Add your SSH keys if deploying to remote servers.
-    - **Environment**: Add secrets like `OPENAI_API_KEY`, `AWS_ACCESS_KEY_ID`, etc.
+    - **Environment / Variable Group**: Add secrets like `OPENAI_API_KEY`, `AWS_ACCESS_KEY_ID`, etc.
     - **Inventory**: Create an inventory (you can copy content from `ansible/inventory.yml` or use the file).
     - **Repositories**: Add this git repository.
     - **Task Templates**: Create templates for "Deploy Backend" and "Deploy Frontend" pointing to the respective playbooks.

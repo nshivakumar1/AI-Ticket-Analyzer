@@ -50,7 +50,7 @@ output "api_endpoint" {
 
 output "frontend_url" {
   description = "Frontend URL"
-  value       = var.enable_cloudfront ? "https://${aws_cloudfront_distribution.frontend[0].domain_name}" : "http://${aws_instance.app.public_dns}"
+  value       = var.enable_cloudfront ? "https://${aws_cloudfront_distribution.frontend[0].domain_name}" : "http://${aws_s3_bucket.frontend.bucket}.s3-website-${var.aws_region}.amazonaws.com"
 }
 
 output "dynatrace_role_arn" {
