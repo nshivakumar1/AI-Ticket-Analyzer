@@ -8,12 +8,11 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-from .routers import tickets
+from .routers import tickets  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ app = FastAPI(
     description="AI-powered support ticket classification and analysis API",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 # CORS middleware
@@ -44,7 +43,7 @@ async def root():
     return {
         "status": "healthy",
         "service": "AI Support Ticket Analyzer API",
-        "version": "1.0.0"
+        "version": "1.0.0",
     }
 
 
@@ -58,13 +57,10 @@ async def health():
 async def global_exception_handler(request, exc):
     """Global exception handler"""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"}
-    )
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
 
+    uvicorn.run(app, host="0.0.0.0", port=8000)

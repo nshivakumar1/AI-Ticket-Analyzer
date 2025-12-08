@@ -8,11 +8,10 @@ from ..models import (
     TicketResponse,
     TicketUpdate,
     TicketListResponse,
-    TicketFilter,
     Priority,
     Category,
     Sentiment,
-    TicketStatus
+    TicketStatus,
 )
 from ..services.ai_service import AIService
 from ..services.dynamodb_service import DynamoDBService
@@ -31,11 +30,9 @@ async def create_ticket(ticket: TicketCreate):
     try:
         # Analyze ticket with AI
         analysis = await ai_service.analyze_ticket(
-            subject=ticket.subject,
-            body=ticket.body,
-            is_vip=ticket.is_vip
+            subject=ticket.subject, body=ticket.body, is_vip=ticket.is_vip
         )
-        
+
         # Prepare ticket data
         ticket_data = {
             "customer_email": ticket.customer_email,
@@ -47,12 +44,12 @@ async def create_ticket(ticket: TicketCreate):
             "sentiment": analysis["sentiment"],
             "status": "New",
             "ai_suggested_reply": analysis["suggested_reply"],
-            "is_vip": ticket.is_vip
+            "is_vip": ticket.is_vip,
         }
-        
+
         # Save to DynamoDB
         created_ticket = db_service.create_ticket(ticket_data)
-        
+
         # Convert to response model
         return TicketResponse(
             ticket_id=created_ticket["ticket_id"],
@@ -66,11 +63,13 @@ async def create_ticket(ticket: TicketCreate):
             sentiment=Sentiment(created_ticket["sentiment"]),
             status=TicketStatus(created_ticket["status"]),
             ai_suggested_reply=created_ticket["ai_suggested_reply"],
-            is_vip=created_ticket.get("is_vip", False)
+            is_vip=created_ticket.get("is_vip", False),
         )
     except Exception as e:
         logger.error(f"Error creating ticket: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create ticket: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create ticket: {str(e)}"
+        )
 
 
 @router.get("", response_model=TicketListResponse)
@@ -80,7 +79,7 @@ async def list_tickets(
     category: Optional[Category] = Query(None),
     sentiment: Optional[Sentiment] = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100)
+    page_size: int = Query(20, ge=1, le=100),
 ):
     """List tickets with optional filters"""
     try:
@@ -90,9 +89,9 @@ async def list_tickets(
             category=category.value if category else None,
             sentiment=sentiment.value if sentiment else None,
             page=page,
-            page_size=page_size
+            page_size=page_size,
         )
-        
+
         # Convert to response models
         tickets = [
             TicketResponse(
@@ -107,16 +106,16 @@ async def list_tickets(
                 sentiment=Sentiment(t["sentiment"]),
                 status=TicketStatus(t["status"]),
                 ai_suggested_reply=t["ai_suggested_reply"],
-                is_vip=t.get("is_vip", False)
+                is_vip=t.get("is_vip", False),
             )
             for t in result["tickets"]
         ]
-        
+
         return TicketListResponse(
             tickets=tickets,
             total=result["total"],
             page=result["page"],
-            page_size=result["page_size"]
+            page_size=result["page_size"],
         )
     except Exception as e:
         logger.error(f"Error listing tickets: {e}")
@@ -130,7 +129,7 @@ async def get_ticket(ticket_id: str):
         ticket = db_service.get_ticket(ticket_id)
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
-        
+
         return TicketResponse(
             ticket_id=ticket["ticket_id"],
             created_at=datetime.fromisoformat(ticket["created_at"]),
@@ -143,7 +142,7 @@ async def get_ticket(ticket_id: str):
             sentiment=Sentiment(ticket["sentiment"]),
             status=TicketStatus(ticket["status"]),
             ai_suggested_reply=ticket["ai_suggested_reply"],
-            is_vip=ticket.get("is_vip", False)
+            is_vip=ticket.get("is_vip", False),
         )
     except HTTPException:
         raise
@@ -160,7 +159,7 @@ async def update_ticket(ticket_id: str, update: TicketUpdate):
         existing = db_service.get_ticket(ticket_id)
         if not existing:
             raise HTTPException(status_code=404, detail="Ticket not found")
-        
+
         # Prepare updates
         updates = {}
         if update.subject is not None:
@@ -169,7 +168,7 @@ async def update_ticket(ticket_id: str, update: TicketUpdate):
             updates["body"] = update.body
         if update.status is not None:
             updates["status"] = update.status.value
-        
+
         if not updates:
             # Return existing ticket if no updates
             return TicketResponse(
@@ -184,12 +183,12 @@ async def update_ticket(ticket_id: str, update: TicketUpdate):
                 sentiment=Sentiment(existing["sentiment"]),
                 status=TicketStatus(existing["status"]),
                 ai_suggested_reply=existing["ai_suggested_reply"],
-                is_vip=existing.get("is_vip", False)
+                is_vip=existing.get("is_vip", False),
             )
-        
+
         # Update ticket
         updated = db_service.update_ticket(ticket_id, updates)
-        
+
         return TicketResponse(
             ticket_id=updated["ticket_id"],
             created_at=datetime.fromisoformat(updated["created_at"]),
@@ -202,13 +201,15 @@ async def update_ticket(ticket_id: str, update: TicketUpdate):
             sentiment=Sentiment(updated["sentiment"]),
             status=TicketStatus(updated["status"]),
             ai_suggested_reply=updated["ai_suggested_reply"],
-            is_vip=updated.get("is_vip", False)
+            is_vip=updated.get("is_vip", False),
         )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error updating ticket {ticket_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update ticket: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update ticket: {str(e)}"
+        )
 
 
 @router.post("/{ticket_id}/reanalyze", response_model=TicketResponse)
@@ -219,25 +220,25 @@ async def reanalyze_ticket(ticket_id: str):
         ticket = db_service.get_ticket(ticket_id)
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
-        
+
         # Re-analyze with AI
         analysis = await ai_service.analyze_ticket(
             subject=ticket["subject"],
             body=ticket["body"],
-            is_vip=ticket.get("is_vip", False)
+            is_vip=ticket.get("is_vip", False),
         )
-        
+
         # Update ticket with new analysis
         updates = {
             "priority": analysis["priority"],
             "category": analysis["category"],
             "sentiment": analysis["sentiment"],
-            "ai_suggested_reply": analysis["suggested_reply"]
+            "ai_suggested_reply": analysis["suggested_reply"],
         }
-        
+
         # Update ticket in DynamoDB
         updated = db_service.update_ticket(ticket_id, updates)
-        
+
         return TicketResponse(
             ticket_id=updated["ticket_id"],
             created_at=datetime.fromisoformat(updated["created_at"]),
@@ -250,11 +251,12 @@ async def reanalyze_ticket(ticket_id: str):
             sentiment=Sentiment(updated["sentiment"]),
             status=TicketStatus(updated["status"]),
             ai_suggested_reply=updated["ai_suggested_reply"],
-            is_vip=updated.get("is_vip", False)
+            is_vip=updated.get("is_vip", False),
         )
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error reanalyzing ticket {ticket_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to reanalyze ticket: {str(e)}")
-
+        raise HTTPException(
+            status_code=500, detail=f"Failed to reanalyze ticket: {str(e)}"
+        )
