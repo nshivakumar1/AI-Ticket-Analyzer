@@ -149,14 +149,19 @@ See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed deployment instructions.
    ```
 
 2. **Configure CI/CD**
-   - Set GitHub Secrets:
-     - `AWS_ACCESS_KEY_ID`
-     - `AWS_SECRET_ACCESS_KEY`
-     - `AWS_REGION`
-     - `ECR_REPOSITORY_NAME`
-     - `EC2_INSTANCE_ID`
-     - `OPENAI_API_KEY`
-     - `DYNAMODB_TABLE_NAME`
+   - Set GitHub Secrets (Settings -> Secrets and variables -> Actions):
+     - **Credentials**:
+       - `AWS_ACCESS_KEY_ID`
+       - `AWS_SECRET_ACCESS_KEY`
+       - `AWS_ACCOUNT_ID`
+     - **Backend**:
+       - `EC2_HOST` (Public IP of App Server)
+       - `EC2_SSH_KEY` (Private Key Content)
+       - `DYNAMODB_TABLE_NAME`
+     - **Frontend**:
+       - `S3_BUCKET_NAME`
+       - `CLOUDFRONT_DISTRIBUTION_ID`
+       - `API_BASE_URL` (e.g. `http://<EC2_HOST>:8000`)
 
 3. **Deploy Backend**
    - Push to `main` branch triggers CI/CD

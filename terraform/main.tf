@@ -488,3 +488,233 @@ resource "aws_cloudwatch_log_group" "app" {
   }
 }
 
+# Dynatrace IAM Role
+resource "aws_iam_role" "dynatrace" {
+  name = "${var.project_name}-${var.environment}-dynatrace-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::509560245411:root" # Dynatrace SaaS
+        }
+        Action = "sts:AssumeRole"
+        Condition = {
+          StringEquals = {
+            "sts:ExternalId" = var.dynatrace_external_id
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.activegate.arn # ActiveGate Instance Role
+        }
+        Action = "sts:AssumeRole"
+        # No External ID required for internal ActiveGate
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-dynatrace-role"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+# Attach CloudWatchReadOnlyAccess
+resource "aws_iam_role_policy_attachment" "dynatrace_cloudwatch" {
+  role       = aws_iam_role.dynatrace.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess"
+}
+
+# Custom Policy for additional metrics (standard Dynatrace requirement)
+resource "aws_iam_role_policy" "dynatrace_custom" {
+  name = "${var.project_name}-${var.environment}-dynatrace-policy"
+  role = aws_iam_role.dynatrace.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "apigateway:GET",
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:DescribeLaunchConfigurations",
+          "cloudwatch:GetMetricData",
+          "cloudwatch:GetMetricStatistics",
+          "cloudwatch:ListMetrics",
+          "dynamodb:ListTables",
+          "dynamodb:DescribeTable",
+          "dynamodb:ListTagsOfResource",
+          "ec2:DescribeAvailabilityZones",
+          "ec2:DescribeInstances",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeSecurityGroups",
+          "elasticloadbalancing:DescribeLoadBalancers",
+          "elasticloadbalancing:DescribeTargetGroups",
+          "lambda:ListFunctions",
+          "lambda:ListTags",
+          "rds:DescribeDBInstances",
+          "rds:ListTagsForResource",
+          "s3:ListAllMyBuckets",
+          "sts:GetCallerIdentity",
+          "tag:GetResources",
+          "tag:GetTagKeys"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+
+# --- Dynatrace ActiveGate Infrastructure ---
+
+# Security Group for ActiveGate
+resource "aws_security_group" "activegate" {
+  name        = "${var.project_name}-${var.environment}-activegate-sg"
+  description = "Security Group for Dynatrace ActiveGate"
+  vpc_id      = aws_vpc.main.id
+
+  # Inbound: Allow internal traffic (OneAgent -> ActiveGate) on 9999
+  ingress {
+    from_port   = 9999
+    to_port     = 9999
+    protocol    = "tcp"
+    cidr_blocks = [aws_vpc.main.cidr_block]
+    description = "OneAgent traffic"
+  }
+
+  # Outbound: Allow HTTPS to Dynatrace SaaS
+  egress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTPS to Dynatrace SaaS"
+  }
+
+  egress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTP for updates"
+  }
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-activegate-sg"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+# IAM Role for ActiveGate (Instance Profile)
+resource "aws_iam_role" "activegate" {
+  name = "${var.project_name}-${var.environment}-activegate-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-activegate-role"
+    Environment = var.environment
+  }
+}
+
+resource "aws_iam_role_policy" "activegate_custom" {
+  name = "${var.project_name}-${var.environment}-activegate-policy"
+  role = aws_iam_role.activegate.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "apigateway:GET",
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:DescribeLaunchConfigurations",
+          "cloudwatch:GetMetricData",
+          "cloudwatch:GetMetricStatistics",
+          "cloudwatch:ListMetrics",
+          "dynamodb:ListTables",
+          "dynamodb:DescribeTable",
+          "dynamodb:ListTagsOfResource",
+          "ec2:DescribeAvailabilityZones",
+          "ec2:DescribeInstances",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeSecurityGroups",
+          "elasticloadbalancing:DescribeLoadBalancers",
+          "elasticloadbalancing:DescribeTargetGroups",
+          "lambda:ListFunctions",
+          "lambda:ListTags",
+          "rds:DescribeDBInstances",
+          "rds:ListTagsForResource",
+          "s3:ListAllMyBuckets",
+          "sts:GetCallerIdentity",
+          "tag:GetResources",
+          "tag:GetTagKeys"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = "sts:AssumeRole"
+        Resource = aws_iam_role.dynatrace.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "activegate" {
+  name = "${var.project_name}-${var.environment}-activegate-profile"
+  role = aws_iam_role.activegate.name
+}
+
+# EC2 Instance for ActiveGate
+resource "aws_instance" "activegate" {
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = var.activegate_instance_type
+  subnet_id     = aws_subnet.public.id 
+  key_name      = aws_key_pair.deployer.key_name
+
+  vpc_security_group_ids = [aws_security_group.activegate.id]
+  iam_instance_profile   = aws_iam_instance_profile.activegate.name
+
+  user_data = <<-EOF
+              #!/bin/bash
+              # Download and Install ActiveGate
+              if [ -n "${var.dynatrace_activegate_url}" ] && [ -n "${var.dynatrace_api_token}" ]; then
+                  wget -O Dynatrace-ActiveGate-Linux.sh "${var.dynatrace_activegate_url}" --header="Authorization: Api-Token ${var.dynatrace_api_token}"
+                  if [ -f Dynatrace-ActiveGate-Linux.sh ]; then
+                      sudo /bin/bash Dynatrace-ActiveGate-Linux.sh
+                  else
+                      echo "Failed to download ActiveGate installer"
+                  fi
+              else
+                  echo "No ActiveGate URL or Token provided"
+              fi
+              EOF
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-activegate"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}

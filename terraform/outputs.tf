@@ -53,3 +53,13 @@ output "frontend_url" {
   value       = var.enable_cloudfront ? "https://${aws_cloudfront_distribution.frontend[0].domain_name}" : "http://${aws_instance.app.public_dns}"
 }
 
+output "dynatrace_role_arn" {
+  description = "ARN of the IAM Role for Dynatrace"
+  value       = aws_iam_role.dynatrace.arn
+}
+
+output "activegate_public_ip" {
+  description = "Public IP of the ActiveGate Instance"
+  value       = aws_instance.activegate.public_ip
+}
+

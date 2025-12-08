@@ -3,7 +3,7 @@
   hosts: webservers
   become: yes
   vars:
-    app_root: /opt/ticket-analyzer/backend
+    app_root: /opt/ticket-analyzer
     venv_path: "{{ app_root }}/venv"
     repo_url: https://github.com/nshivakumar1/AI-Ticket-Analyzer.git # Update if needed
     branch: main
@@ -20,20 +20,18 @@
       when: ansible_os_family == "Debian"
 
     - name: Install system dependencies (RedHat)
-      yum:
-        name:
-          - git
-          - python3-pip
-        state: present
+      shell: |
+        amazon-linux-extras install nginx1 -y
+        yum install -y git python3-pip nginx gcc python38-devel rsync
+      args:
+        executable: /bin/bash
+      become: yes
       when: ansible_os_family == "RedHat"
-
-    - name: Create application directory
+    
+    - name: Clean application directory (ensure fresh clone)
       file:
         path: "{{ app_root }}"
-        state: directory
-        owner: ec2-user
-        group: ec2-user
-        mode: '0755'
+        state: absent
 
     - name: Clone/Update repository
       git:
@@ -42,22 +40,65 @@
         version: "{{ branch }}"
         force: yes
 
+    - name: Fix permissions (recurse)
+      file:
+        path: "{{ app_root }}"
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        recurse: yes
+
     - name: Create virtual environment
-      command: python3 -m venv {{ venv_path }}
+      command: /usr/bin/python3.8 -m venv {{ venv_path }}
       args:
         creates: "{{ venv_path }}"
 
     - name: Install requirements
       pip:
-        requirements: "{{ app_root }}/requirements.txt"
+        requirements: "{{ app_root }}/backend/requirements.txt"
         virtualenv: "{{ venv_path }}"
+        virtualenv_command: /usr/bin/python3.8 -m venv
+    - name: Fetch OpenAI API Key from SSM
+      shell: "aws ssm get-parameter --name /ticket-analyzer/dev/openai-api-key --with-decryption --query Parameter.Value --output text --region us-east-1"
+      register: openai_key_ssm
+      changed_when: false
 
-    - name: Copy .env file (you should manage secrets securely)
+    - name: Create .env file
       copy:
         content: |
-          OPENAI_API_KEY={{ lookup('env', 'OPENAI_API_KEY') }}
+          OPENAI_API_KEY={{ openai_key_ssm.stdout }}
           AWS_REGION=us-east-1
+          DYNAMODB_TABLE_NAME=ticket-analyzer-dev-tickets
         dest: "{{ app_root }}/.env"
+        mode: '0600'
+        owner: ec2-user
+        group: ec2-user
+
+    - name: Configure Nginx Reverse Proxy
+      copy:
+        dest: /etc/nginx/conf.d/ticket-analyzer.conf
+        content: |
+          server {
+              listen 80;
+              server_name _;
+
+              # Frontend Static Files
+              location / {
+                  root /usr/share/nginx/html;
+                  index index.html;
+                  try_files $uri $uri/ /index.html;
+              }
+
+              # Backend API
+              location /api/ {
+                  rewrite ^/api/(.*) /$1 break;
+                  proxy_pass http://127.0.0.1:8000;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              }
+          }
+      notify: Restart nginx
 
     - name: Setup Systemd service
       copy:
@@ -68,13 +109,17 @@
           After=network.target
 
           [Service]
+          Type=simple
           User=ec2-user
-          WorkingDirectory={{ app_root }}
-          Environment="PATH={{ venv_path }}/bin"
+          Group=ec2-user
+          WorkingDirectory={{ app_root }}/backend
+          EnvironmentFile={{ app_root }}/.env
           ExecStart={{ venv_path }}/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+          Restart=always
 
           [Install]
           WantedBy=multi-user.target
+      notify: Restart backend service
 
     - name: Restart backend service
       systemd:
@@ -82,3 +127,30 @@
         state: restarted
         enabled: yes
         daemon_reload: yes
+
+  handlers:
+    - name: Restart nginx
+      systemd:
+        name: nginx
+        state: restarted
+        enabled: yes
+
+    - name: Restart backend service
+      systemd:
+        name: ticket-backend
+        state: restarted
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Download Dynatrace OneAgent
+      get_url:
+        url: "https://{{ dt_env_id }}.live.dynatrace.com/api/v1/deployment/installer/agent/unix/default/latest?Api-Token={{ dt_api_token }}&arch=x86"
+        dest: /tmp/Dynatrace-OneAgent-Linux.sh
+        mode: '0755'
+      when: dt_env_id is defined and dt_api_token is defined
+
+    - name: Install Dynatrace OneAgent
+      command: /bin/sh /tmp/Dynatrace-OneAgent-Linux.sh CMD_LOG_PATH=/var/log/dynatrace_install.log
+      become: yes
+      when: dt_env_id is defined and dt_api_token is defined
+

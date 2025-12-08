@@ -64,3 +64,28 @@ variable "enable_s3_versioning" {
   default     = false  # Disabled by default for free tier optimization
 }
 
+variable "dynatrace_external_id" {
+  description = "External ID for Dynatrace AWS Integration"
+  type        = string
+  sensitive   = true
+}
+
+
+variable "activegate_instance_type" {
+  description = "Instance type for Dynatrace ActiveGate"
+  type        = string
+  default     = "t3.small"
+}
+
+variable "dynatrace_activegate_url" {
+  description = "Download URL for Dynatrace ActiveGate installer (Linux Shell Script)"
+  type        = string
+  default     = ""
+}
+
+variable "dynatrace_api_token" {
+  description = "Dynatrace API Token for ActiveGate download (from --header Authorization: Api-Token ...)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

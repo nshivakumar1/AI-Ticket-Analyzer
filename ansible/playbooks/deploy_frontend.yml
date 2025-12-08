@@ -1,10 +1,8 @@
 ---
-- name: Deploy Frontend
+- name: Build Frontend
   hosts: local
   vars:
     frontend_root: ../../frontend
-    s3_bucket: ticket-analyzer-dev-frontend-35709762
-  
   tasks:
     - name: Install Node.js dependencies
       command: npm install
@@ -15,9 +13,30 @@
       command: npm run build
       args:
         chdir: "{{ frontend_root }}"
+      environment:
+        VITE_API_BASE_URL: "http://100.30.240.77/api"
 
-    # Requires AWS CLI to be configured on the runner machine
-    - name: Sync to S3
-      command: aws s3 sync dist/ s3://{{ s3_bucket }} --delete
-      args:
-        chdir: "{{ frontend_root }}"
+- name: Deploy Frontend to EC2
+  hosts: webservers
+  become: yes
+  vars:
+    frontend_root: ../../frontend
+  tasks:
+    - name: Ensure nginx html dir
+      file:
+        path: /usr/share/nginx/html
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Copy dist to nginx
+      synchronize:
+        src: "{{ frontend_root }}/dist/"
+        dest: /usr/share/nginx/html/
+        delete: yes
+        archive: no
+        recursive: yes
+        rsync_path: "sudo rsync"
+      delegate_to: localhost
+      become: no
