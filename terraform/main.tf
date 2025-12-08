@@ -457,16 +457,17 @@ resource "aws_instance" "app" {
   }
 }
 
-# Key Pair (you'll need to provide the public key)
-# Note: Update the public_key path or use an existing key pair
-# You can also create the key pair manually in AWS Console and reference it by name
+# Generate a new SSH Key Pair
+resource "tls_private_key" "pk" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
 resource "aws_key_pair" "deployer" {
-  key_name   = "${var.project_name}-${var.environment}-key"
-  # Update this path to your public key, or comment out and use existing key pair
-  public_key = try(file("~/.ssh/id_rsa.pub"), "")
+  key_name   = "${var.project_name}-${var.environment}-key-v2"
+  public_key = tls_private_key.pk.public_key_openssh
 
   tags = {
-    Name        = "${var.project_name}-${var.environment}-key"
     Environment = var.environment
     Project     = var.project_name
   }
@@ -474,6 +475,12 @@ resource "aws_key_pair" "deployer" {
   lifecycle {
     create_before_destroy = true
   }
+}
+
+resource "local_file" "ssh_key" {
+  content         = tls_private_key.pk.private_key_pem
+  filename        = "../${var.project_name}-${var.environment}-key-v2.pem"
+  file_permission = "0400"
 }
 
 # CloudWatch Log Group
