@@ -19,10 +19,9 @@
         update_cache: yes
       when: ansible_os_family == "Debian"
 
-    - name: Install system dependencies (RedHat)
+    - name: Install system dependencies (RedHat/Amazon Linux 2023)
       shell: |
-        amazon-linux-extras install nginx1 -y
-        yum install -y git python3-pip nginx gcc python38-devel rsync
+        dnf install -y git python3-pip nginx gcc python3-devel rsync
       args:
         executable: /bin/bash
       become: yes
@@ -49,7 +48,7 @@
         recurse: yes
 
     - name: Create virtual environment
-      command: /usr/bin/python3.8 -m venv {{ venv_path }}
+      command: /usr/bin/python3 -m venv {{ venv_path }}
       args:
         creates: "{{ venv_path }}"
 
@@ -57,7 +56,7 @@
       pip:
         requirements: "{{ app_root }}/backend/requirements.txt"
         virtualenv: "{{ venv_path }}"
-        virtualenv_command: /usr/bin/python3.8 -m venv
+        virtualenv_command: /usr/bin/python3 -m venv
     - name: Fetch OpenAI API Key from SSM
       shell: "aws ssm get-parameter --name /ticket-analyzer/dev/openai-api-key --with-decryption --query Parameter.Value --output text --region us-east-1"
       register: openai_key_ssm
