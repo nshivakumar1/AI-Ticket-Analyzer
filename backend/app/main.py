@@ -5,10 +5,10 @@ import logging
 import os
 from dotenv import load_dotenv
 
-from .routers import tickets
-
 # Load environment variables
 load_dotenv()
+
+from .routers import tickets
 
 # Configure logging
 logging.basicConfig(
