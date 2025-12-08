@@ -121,7 +121,8 @@ resource "aws_dynamodb_table" "tickets" {
 
 # S3 Bucket for Frontend
 resource "aws_s3_bucket" "frontend" {
-  bucket = "${var.project_name}-${var.environment}-frontend-${random_id.bucket_suffix.hex}"
+  bucket        = "${var.project_name}-${var.environment}-frontend-${random_id.bucket_suffix.hex}"
+  force_destroy = true
 
   tags = {
     Name        = "${var.project_name}-${var.environment}-frontend"
@@ -427,6 +428,7 @@ resource "aws_iam_instance_profile" "ec2" {
 resource "aws_ecr_repository" "backend" {
   name                 = var.ecr_repository_name
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
