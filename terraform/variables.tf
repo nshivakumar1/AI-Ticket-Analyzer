@@ -58,3 +58,9 @@ variable "enable_cloudfront" {
   default     = true
 }
 
+variable "enable_s3_versioning" {
+  description = "Enable S3 versioning (can increase storage costs)"
+  type        = bool
+  default     = false  # Disabled by default for free tier optimization
+}
+

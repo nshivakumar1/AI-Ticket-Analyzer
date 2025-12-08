@@ -1,0 +1,84 @@
+---
+- name: Deploy Backend
+  hosts: webservers
+  become: yes
+  vars:
+    app_root: /opt/ticket-analyzer/backend
+    venv_path: "{{ app_root }}/venv"
+    repo_url: https://github.com/nshivakumar1/AI-Ticket-Analyzer.git # Update if needed
+    branch: main
+  
+  tasks:
+    - name: Install system dependencies (Debian)
+      apt:
+        name: 
+          - python3-venv
+          - python3-pip
+          - git
+        state: present
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Install system dependencies (RedHat)
+      yum:
+        name:
+          - git
+          - python3-pip
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Create application directory
+      file:
+        path: "{{ app_root }}"
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        mode: '0755'
+
+    - name: Clone/Update repository
+      git:
+        repo: "{{ repo_url }}"
+        dest: /opt/ticket-analyzer
+        version: "{{ branch }}"
+        force: yes
+
+    - name: Create virtual environment
+      command: python3 -m venv {{ venv_path }}
+      args:
+        creates: "{{ venv_path }}"
+
+    - name: Install requirements
+      pip:
+        requirements: "{{ app_root }}/requirements.txt"
+        virtualenv: "{{ venv_path }}"
+
+    - name: Copy .env file (you should manage secrets securely)
+      copy:
+        content: |
+          OPENAI_API_KEY={{ lookup('env', 'OPENAI_API_KEY') }}
+          AWS_REGION=us-east-1
+        dest: "{{ app_root }}/.env"
+
+    - name: Setup Systemd service
+      copy:
+        dest: /etc/systemd/system/ticket-backend.service
+        content: |
+          [Unit]
+          Description=Ticket Analyzer Backend
+          After=network.target
+
+          [Service]
+          User=ec2-user
+          WorkingDirectory={{ app_root }}
+          Environment="PATH={{ venv_path }}/bin"
+          ExecStart={{ venv_path }}/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Restart backend service
+      systemd:
+        name: ticket-backend
+        state: restarted
+        enabled: yes
+        daemon_reload: yes

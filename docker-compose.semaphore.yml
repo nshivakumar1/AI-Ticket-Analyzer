@@ -1,0 +1,37 @@
+version: '3'
+
+services:
+  semaphore:
+    ports:
+      - 3000:3000
+    image: semaphoreui/semaphore:latest
+    environment:
+      - SEMAPHORE_DB_USER=semaphore
+      - SEMAPHORE_DB_PASS=semaphore
+      - SEMAPHORE_DB_HOST=postgres
+      - SEMAPHORE_DB_PORT=5432
+      - SEMAPHORE_DB_DIALECT=postgres
+      - SEMAPHORE_DB=semaphore
+      - SEMAPHORE_PLAYBOOK_PATH=/tmp/semaphore
+      - SEMAPHORE_ADMIN_PASSWORD=admin
+      - SEMAPHORE_ADMIN_NAME=Admin
+      - SEMAPHORE_ADMIN_EMAIL=admin@localhost
+      - SEMAPHORE_ADMIN=admin
+    # volumes:
+    #   - ./ansible:/ansible  # Mount your playbooks here if you want local access
+    depends_on:
+      - postgres
+    restart: always
+
+  postgres:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=semaphore
+      - POSTGRES_PASSWORD=semaphore
+      - POSTGRES_DB=semaphore
+    volumes:
+      - semaphore-postgres:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  semaphore-postgres:

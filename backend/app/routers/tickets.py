@@ -30,7 +30,7 @@ async def create_ticket(ticket: TicketCreate):
     """Create a new support ticket with AI analysis"""
     try:
         # Analyze ticket with AI
-        analysis = ai_service.analyze_ticket(
+        analysis = await ai_service.analyze_ticket(
             subject=ticket.subject,
             body=ticket.body,
             is_vip=ticket.is_vip
@@ -221,7 +221,7 @@ async def reanalyze_ticket(ticket_id: str):
             raise HTTPException(status_code=404, detail="Ticket not found")
         
         # Re-analyze with AI
-        analysis = ai_service.analyze_ticket(
+        analysis = await ai_service.analyze_ticket(
             subject=ticket["subject"],
             body=ticket["body"],
             is_vip=ticket.get("is_vip", False)

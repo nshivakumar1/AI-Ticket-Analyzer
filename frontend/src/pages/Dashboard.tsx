@@ -1,35 +1,21 @@
-import { useState, useEffect } from 'react'
-import { ticketService, Ticket, TicketFilters } from '../services/api'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { ticketService, TicketFilters } from '../services/api'
 import TicketCard from '../components/TicketCard'
 
 export default function Dashboard() {
-  const [tickets, setTickets] = useState<Ticket[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<TicketFilters>({
     page: 1,
     page_size: 20,
   })
-  const [total, setTotal] = useState(0)
 
-  const loadTickets = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const response = await ticketService.list(filters)
-      setTickets(response.tickets)
-      setTotal(response.total)
-    } catch (err) {
-      setError('Failed to load tickets. Please check if the API is running.')
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['tickets', filters],
+    queryFn: () => ticketService.list(filters),
+  })
 
-  useEffect(() => {
-    loadTickets()
-  }, [filters])
+  const tickets = data?.tickets || []
+  const total = data?.total || 0
 
   const handleFilterChange = (key: keyof TicketFilters, value: any) => {
     setFilters((prev) => ({
@@ -120,7 +106,7 @@ export default function Dashboard() {
       </div>
 
       {/* Loading State */}
-      {loading && (
+      {isLoading && (
         <div className="text-center py-12">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
           <p className="mt-2 text-gray-600">Loading tickets...</p>
@@ -130,12 +116,14 @@ export default function Dashboard() {
       {/* Error State */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <p className="text-red-800">{error}</p>
+          <p className="text-red-800">
+            Failed to load tickets. Please check if the API is running.
+          </p>
         </div>
       )}
 
       {/* Tickets List */}
-      {!loading && !error && (
+      {!isLoading && !error && (
         <>
           <div className="mb-4 text-sm text-gray-600">
             Showing {tickets.length} of {total} tickets

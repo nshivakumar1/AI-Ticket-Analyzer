@@ -2,13 +2,13 @@ import os
 import logging
 from typing import Dict, Any
 import openai
-from openai import OpenAI
+from openai import AsyncOpenAI
 from ..models import Priority, Category, Sentiment
 
 logger = logging.getLogger(__name__)
 
 # Initialize OpenAI client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 class AIService:
@@ -19,7 +19,7 @@ class AIService:
         if not self.api_key:
             logger.warning("OPENAI_API_KEY not set, using fallback rules")
     
-    def analyze_ticket(
+    async def analyze_ticket(
         self, 
         subject: str, 
         body: str, 
@@ -31,14 +31,14 @@ class AIService:
         """
         try:
             if self.api_key:
-                return self._analyze_with_ai(subject, body, is_vip)
+                return await self._analyze_with_ai(subject, body, is_vip)
             else:
                 return self._analyze_with_rules(subject, body, is_vip)
         except Exception as e:
             logger.error(f"AI analysis failed: {e}, falling back to rules")
             return self._analyze_with_rules(subject, body, is_vip)
     
-    def _analyze_with_ai(
+    async def _analyze_with_ai(
         self, 
         subject: str, 
         body: str, 
@@ -64,7 +64,7 @@ Respond in JSON format:
 }}"""
 
         try:
-            response = client.chat.completions.create(
+            response = await client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": "You are a support ticket analyzer. Always respond with valid JSON."},
@@ -184,4 +184,5 @@ Respond in JSON format:
             return priority_map.get(ai_priority, "P2")
         
         return ai_priority
+
 

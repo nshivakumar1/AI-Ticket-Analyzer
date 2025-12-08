@@ -35,16 +35,69 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
-# VPC (using default VPC for simplicity - free tier friendly)
-data "aws_vpc" "default" {
-  default = true
+# VPC - Create a simple VPC (free tier friendly, no additional cost)
+# This ensures we always have a VPC even if default VPC doesn't exist
+resource "aws_vpc" "main" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-vpc"
+    Environment = var.environment
+    Project     = var.project_name
+    CostCenter  = "free-tier"
+  }
 }
 
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
+# Internet Gateway for VPC
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-igw"
+    Environment = var.environment
+    Project     = var.project_name
+    CostCenter  = "free-tier"
   }
+}
+
+# Public Subnet
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = data.aws_availability_zones.available.names[0]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-public-subnet"
+    Environment = var.environment
+    Project     = var.project_name
+    CostCenter  = "free-tier"
+  }
+}
+
+# Route table for public subnet
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-public-rt"
+    Environment = var.environment
+    Project     = var.project_name
+    CostCenter  = "free-tier"
+  }
+}
+
+# Associate route table with subnet
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
 }
 
 # DynamoDB Table
@@ -62,6 +115,7 @@ resource "aws_dynamodb_table" "tickets" {
     Name        = "${var.project_name}-${var.environment}-tickets"
     Environment = var.environment
     Project     = var.project_name
+    CostCenter  = "free-tier"  # Cost tracking tag
   }
 }
 
@@ -73,6 +127,7 @@ resource "aws_s3_bucket" "frontend" {
     Name        = "${var.project_name}-${var.environment}-frontend"
     Environment = var.environment
     Project     = var.project_name
+    CostCenter  = "free-tier"  # Cost tracking tag
   }
 }
 
@@ -92,7 +147,7 @@ resource "aws_s3_bucket_public_access_block" "frontend" {
 resource "aws_s3_bucket_versioning" "frontend" {
   bucket = aws_s3_bucket.frontend.id
   versioning_configuration {
-    status = "Enabled"
+    status = var.enable_s3_versioning ? "Enabled" : "Disabled"  # Configurable for free tier optimization
   }
 }
 
@@ -199,7 +254,7 @@ resource "aws_cloudfront_distribution" "frontend" {
 resource "aws_security_group" "ec2" {
   name        = "${var.project_name}-${var.environment}-ec2-sg"
   description = "Security group for ticket analyzer EC2 instance"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = aws_vpc.main.id
 
   ingress {
     description = "HTTP"
@@ -362,8 +417,16 @@ resource "aws_instance" "app" {
   instance_type = var.ec2_instance_type
   key_name      = aws_key_pair.deployer.key_name  # You'll need to create this separately
 
+  subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.ec2.id]
   iam_instance_profile   = aws_iam_instance_profile.ec2.name
+
+  # Explicitly set root volume size to stay within free tier (30GB total)
+  root_block_device {
+    volume_size = 8  # 8GB root volume (within 30GB free tier limit)
+    volume_type = "gp2"
+    delete_on_termination = true
+  }
 
   user_data = <<-EOF
               #!/bin/bash
@@ -390,6 +453,7 @@ resource "aws_instance" "app" {
     Name        = "${var.project_name}-${var.environment}-app"
     Environment = var.environment
     Project     = var.project_name
+    CostCenter  = "free-tier"  # Cost tracking tag
   }
 }
 

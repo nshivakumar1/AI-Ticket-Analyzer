@@ -1,0 +1,23 @@
+---
+- name: Deploy Frontend
+  hosts: local
+  vars:
+    frontend_root: ../../frontend
+    s3_bucket: ticket-analyzer-dev-frontend-35709762
+  
+  tasks:
+    - name: Install Node.js dependencies
+      command: npm install
+      args:
+        chdir: "{{ frontend_root }}"
+
+    - name: Build Frontend
+      command: npm run build
+      args:
+        chdir: "{{ frontend_root }}"
+
+    # Requires AWS CLI to be configured on the runner machine
+    - name: Sync to S3
+      command: aws s3 sync dist/ s3://{{ s3_bucket }} --delete
+      args:
+        chdir: "{{ frontend_root }}"
